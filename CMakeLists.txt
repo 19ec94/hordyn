@@ -12,4 +12,5 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Ordner include als Include-Pfad hinzufügen
 # target_include_directories(include)
 
+add_subdirectory(src/hordyn)
 add_subdirectory(src/2d)
