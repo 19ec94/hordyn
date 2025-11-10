@@ -2,11 +2,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-data_path_1 = 'output/fullmodel/2012_tau1.0/f0/summary.csv'
+data_path_1 = 'output/fullmodel/2012_tau1.0_v2/f0/summary.csv'
 df_1 = pd.read_csv(data_path_1)
 output_dir_1 = os.path.dirname(data_path_1)
 
-data_path_2 = 'output/fullmodel/2012_tau1.2/f0/summary.csv'
+data_path_2 = 'output/fullmodel/2012_tau1.0/f0/summary.csv'
 df_2 = pd.read_csv(data_path_2)
 output_dir_2 = os.path.dirname(data_path_2)
 

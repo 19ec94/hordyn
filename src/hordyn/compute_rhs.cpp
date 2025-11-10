@@ -136,20 +136,39 @@ std::vector<double> compute_rhs(const Domain& domain,
 		}
 		// Periodic BC in the age axis 
 		for (int row = 0; row < num_rows; ++row) {
-				double g_low = std::max(g[idx(row, num_cols - 1)], 0.0) * phi[idx(row, num_cols - 1)]
+				double g_low = 0.0, g_high = 0.0, rk = 0.0, limiter = 0.0, flux_left = 0.0;
+				if (row < interfaceYIndexDirichlet) {
+				g_low = std::max(g[idx(row, num_cols - 1)], 0.0) * phi[idx(row, num_cols - 1)]
 						+ (std::min(g[idx(row, 0)], 0.0) * phi[idx(row, 0)]) / 2.0;
-				double g_high = (g[idx(row, num_cols - 1)] * phi[idx(row, num_cols - 1)] + (g[idx(row, 0)] * phi[idx(row, 0)] / 2.0)) / 2.0;
-				double rk = compute_rk(
+				g_high = (g[idx(row, num_cols - 1)] * phi[idx(row, num_cols - 1)] + (g[idx(row, 0)] * phi[idx(row, 0)] / 2.0)) / 2.0;
+				rk = compute_rk(
 								2.0 * g[idx(row, num_cols - 2)], 2.0 * g[idx(row, num_cols - 1)], g[idx(row, 0)], g[idx(row, 1)],
 								phi[idx(row, num_cols - 2)], phi[idx(row, num_cols - 1)], phi[idx(row, 0)], phi[idx(row, 1)]
 							   );
-				double limiter = compute_korean_limiter(rk);
-				double flux_left = g_low + limiter * (g_high - g_low);
+				limiter = compute_korean_limiter(rk);
+				flux_left = g_low + limiter * (g_high - g_low);
+				// calcualte data at last interface
 				G_left[idx_G(row, num_cols)] = flux_left;
 				G_right[idx_G(row, num_cols)] = 2.0 * flux_left;
 				// data at first interface  ==  data at last interface
 				G_left[idx_G(row, 0)] = G_left[idx_G(row, num_cols)];
 				G_right[idx_G(row, 0)] = G_right[idx_G(row, num_cols)];
+				} else {
+				g_low = std::max(g[idx(row, num_cols - 1)], 0.0) * phi[idx(row, num_cols - 1)]
+						+ std::min(g[idx(row, 0)], 0.0) * phi[idx(row, 0)];
+				g_high = (g[idx(row, num_cols - 1)] * phi[idx(row, num_cols - 1)] + g[idx(row, 0)] * phi[idx(row, 0)]) / 2.0;
+				rk = compute_rk(
+								g[idx(row, num_cols - 2)], g[idx(row, num_cols - 1)], g[idx(row, 0)], g[idx(row, 1)],
+								phi[idx(row, num_cols - 2)], phi[idx(row, num_cols - 1)], phi[idx(row, 0)], phi[idx(row, 1)]
+							   );
+				limiter = compute_korean_limiter(rk);
+				flux_left = g_low + limiter * (g_high - g_low);
+				G_left[idx_G(row, num_cols)] = flux_left;
+				G_right[idx_G(row, num_cols)] = flux_left;
+				// data at first interface  ==  data at last interface
+				G_left[idx_G(row, 0)] = G_left[idx_G(row, num_cols)];
+				G_right[idx_G(row, 0)] = G_right[idx_G(row, num_cols)];
+				}
 		}
 
 		// Compute horizontal fluxes across interfaces

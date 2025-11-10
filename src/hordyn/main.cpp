@@ -16,7 +16,7 @@ int main() {
 		 * Define output directory to write output files
 		 */
 		int rank = 0;
-		std::string directory_path = create_folder("output/fullmodel/2012_tau1.2/f", rank);
+		std::string directory_path = create_folder("output/fullmodel/2012_tau1.0_v2/f", rank);
 
 		/*
 		 * Instantiate the log variable to collect date over time steps
@@ -41,7 +41,7 @@ int main() {
 		Time time;
 		time.current_time = 0.0;
 		time.cfl = 0.4;
-		time.end_time = 12;
+		time.end_time = 8.0;
 		
 
 		/*

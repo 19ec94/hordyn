@@ -8,7 +8,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LinearSegmentedColormap, BoundaryNorm
 
 # Folder and file pattern for loading data files
-folder = 'output/fullmodel/2012_tau1.2/f0'
+folder = 'output/fullmodel/2012_tau1.0_v2/f0'
 file_pattern = os.path.join(folder, 'phi*.txt')
 
 # Read the timestamps

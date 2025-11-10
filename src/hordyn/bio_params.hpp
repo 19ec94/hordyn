@@ -7,7 +7,7 @@ struct BioParams {
 		const double gamma2 = 1.2;
 
 		// Maturation function parameters
-		const double tau_h = 1.2;   // maturation velocity rate 
+		const double tau_h = 1.0;   // maturation velocity rate 
 		const double c1 = 0.68;
 		const double c2 = 0.08;
 		// basal FSH scale
