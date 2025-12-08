@@ -21,11 +21,15 @@ struct Log {
     std::vector<double> M;
     std::vector<double> U;
     std::vector<double> uf;
+    // 
+    std::vector<double> GF;
+    std::vector<double> mass_mitosis;
+    std::vector<double> mass_omega12;
 
     // Method for writing logs to a csv file
     void write_summary(const std::string& filename) const {
         std::ofstream file(filename);
-        file << "step,dt,time,phi_max,mass,local_maturity,global_maturity,global_fsh,local_fsh\n";
+        file << "step,dt,time,phi_max,mass,local_maturity,global_maturity,global_fsh,local_fsh,mass_mitosis,mass_omega12\n";
         for (size_t i = 0; i < step_count.size(); ++i) {
             file << step_count[i] << ","
                 << dt[i] << ","
@@ -35,7 +39,9 @@ struct Log {
                 << mf[i] << ","
                 << M[i] << ","
                 << U[i] << ","
-                << uf[i] << "\n";
+                << uf[i] <<","
+                << mass_mitosis[i] <<","
+                << mass_omega12[i] << "\n";
         }
     }
 

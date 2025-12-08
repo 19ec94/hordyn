@@ -8,6 +8,42 @@
 #include <vector>
 #include <mpi.h>
 
+///double compute_exact_solution(double t,
+///        const Domain& domain,
+///        std::vector<double>& g) {
+///    std::vector<double> result_at_t (g.size(), 0.0);
+///    std::vector<double> centers_x = domain.centers_x;
+///    double xs = domain.Dc/2.0;
+///
+///    for (const auto& x : centers_x ) {
+///        if (x < xs) {
+///        } else if (x = 1) {
+///        } else {
+///        }
+///    }
+///
+///  // double xs
+///  // Helper lambda for trace function Tr(t)
+///  //auto Tr = [&](double tau) {
+///  //  double val = phi0(xs - gL * tau);
+///  //  return (gL / gR) * val;  // Flux continuity relation
+///  //};
+///
+///  //if (x < xs) {
+///  //  // Left side: transported initial condition at speed gL
+///  //  return phi0(x - gL * t) * std::exp(-lambda_l * t);
+///  //}
+///  //else if (x < xs + gR * t) {
+///  //  // Right side near interface: use trace function at shifted time tau
+///  //  double tau = t - (x - xs) / gR;
+///  //  return Tr(tau) * std::exp(-lambda_l * tau);
+///  //}
+///  //else {
+///  //  // Far right side: transported initial condition at speed gR
+///  //  return phi0(x - gR * t) * std::exp(-lambda_r * t);
+///  //}
+///}
+
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
@@ -15,7 +51,7 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &Np);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    const uint32_t Nf = 10;
+    const uint32_t Nf = 1;
     int base_follicles = Nf / Np; 
     int extra_follicles = Nf % Np;
 
@@ -43,9 +79,9 @@ int main(int argc, char** argv) {
     //const uint32_t Nc = 1;
     // Duration of one cell cycle
     const double Dc = 1.0;
-    const double ys = 0.3;
-    const uint32_t cells_per_half_cycle = 60;
-    const uint32_t Ny = 120;
+    const double ys = 0.5;
+    const uint32_t cells_per_half_cycle = 20;
+    const uint32_t Ny = 40;
 
     const Domain domain = Domain(Dc, ys, cells_per_half_cycle, Ny);
 
@@ -53,7 +89,7 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < my_Nf; i++) {
         time[i] = Time {};
         time[i].cfl = 0.4;
-        time[i].end_time = 1.5;
+        time[i].end_time = 5.0;
     }
 
     std::vector<FollicleParams> follicle_params(my_Nf);
@@ -83,10 +119,15 @@ int main(int argc, char** argv) {
 
     std::vector<double> phi_max(my_Nf, 0.0);
     std::vector<double> mass(my_Nf, 0.0);
+    std::vector<double> mass_mitosis(my_Nf, 0.0);
+    std::vector<double> mass_omega12(my_Nf, 0.0);
+
     for (size_t i = 0; i < my_Nf; i++) {
         compute_phi(domain, phi[i], follicle_params[i]);
         phi_max[i] = find_abs_max_value(phi[i]);
         mass[i] = compute_mass(domain, phi[i]);
+        mass_mitosis[i] = compute_mass_mitosis(domain, phi[i]);
+        mass_omega12[i] = compute_mass_omega12(domain, phi[i]);
         mf[i] = compute_mf(domain, phi[i]);
     }
 
@@ -100,13 +141,12 @@ int main(int argc, char** argv) {
 
     double U = 0.0;
     GlobalBioParams global_bio_params;
-    global_bio_params.U_min = 0.9;
-    global_bio_params.c = 10;
-    global_bio_params.Lambda_bar = 1.0;
 
-    U = compute_U(global_bio_params, M);
+    //U = compute_U(global_bio_params, M);
+    U = compute_U_ol(global_bio_params, 2.0, time[0].current_time);
     for (size_t i = 0; i < my_Nf; i++)  {
-        uf[i] = compute_uf(follicle_params[i], mf[i], U);
+        //uf[i] = compute_uf(follicle_params[i], mf[i], U);
+        uf[i] = compute_uf_ol(global_bio_params, 2.0, time[i].current_time);
         compute_g_h(domain, g[i], h[i], follicle_params[i], uf[i]);
         compute_source(domain, source[i], global_bio_params, U);
     }
@@ -137,6 +177,8 @@ int main(int argc, char** argv) {
         log[i].time.push_back(time[i].current_time);
         log[i].phi_max.push_back(phi_max[i]);
         log[i].mass.push_back(mass[i]);
+        log[i].mass_mitosis.push_back(mass_mitosis[i]);
+        log[i].mass_omega12.push_back(mass_omega12[i]);
         log[i].mf.push_back(mf[i]);
         log[i].M.push_back(M);
         log[i].U.push_back(U);
@@ -174,6 +216,9 @@ int main(int argc, char** argv) {
 
     while (time[0].current_time < time[0].end_time) {
         for (size_t i = 0; i < my_Nf; i++) {
+            if (time[i].current_time + time[i].dt > time[i].end_time) {
+                time[i].dt = time[i].end_time - time[i].current_time;
+            }
             rhs1[i] = compute_rhs(domain, time[i], phi[i],
                     g[i], h[i], source[i]);
             for (size_t j = 0; j < phi[i].size(); ++j) {
@@ -199,6 +244,8 @@ int main(int argc, char** argv) {
 
             phi_max[i] = find_abs_max_value(phi[i]);
             mass[i] = compute_mass(domain, phi[i]);
+            mass_mitosis[i] = compute_mass_mitosis(domain, phi[i]);
+            mass_omega12[i] = compute_mass_omega12(domain, phi[i]);
             mf[i] = compute_mf(domain, phi[i]);
         }
 
@@ -207,10 +254,12 @@ int main(int argc, char** argv) {
         M = 0.0;
         MPI_Allreduce(&local_mf_sum, &M, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         U = 0.0;
-        U = compute_U(global_bio_params, M);
+        //U = compute_U(global_bio_params, M);
+        U = compute_U_ol(global_bio_params, 2.0, time[0].current_time);
 
         for (size_t i = 0; i < my_Nf; i++)  {
-            uf[i] = compute_uf(follicle_params[i], mf[i], U);
+            //uf[i] = compute_uf(follicle_params[i], mf[i], U);
+            uf[i] = compute_uf_ol(global_bio_params, 2.0, time[i].current_time);
             compute_g_h(domain, g[i], h[i], follicle_params[i], uf[i]);
             compute_source(domain, source[i], global_bio_params, U);
             dt[i] = compute_dt(domain, time[i], g[i], h[i], source[i]);
@@ -237,6 +286,8 @@ int main(int argc, char** argv) {
             log[i].time.push_back(time[i].current_time);
             log[i].phi_max.push_back(phi_max[i]);
             log[i].mass.push_back(mass[i]);
+            log[i].mass_mitosis.push_back(mass_mitosis[i]);
+            log[i].mass_omega12.push_back(mass_omega12[i]);
             log[i].mf.push_back(mf[i]);
             log[i].M.push_back(M);
             log[i].U.push_back(U);

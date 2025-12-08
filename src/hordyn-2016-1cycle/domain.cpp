@@ -12,7 +12,7 @@ Domain::Domain(double Dc_, double ys_, uint32_t cells_per_half_cycle_, uint32_t 
     coords_x(Nx + 1), coords_y(Ny +1), centers_x(Nx), centers_y(Ny) {
         if (Dc <= 0)
             throw std::invalid_argument("Dc must be >0.");
-        if (ys <= 0 || ys >= 1.0)
+        if (ys <= 0 || ys > 1)
             throw std::invalid_argument("ys must be in ]0, 1[.");
         if (Nx <=0)
             throw std::invalid_argument("Nx must be > 0");

@@ -19,6 +19,7 @@ struct Time {
 		double dt_h = 0.0;
 		double max_source = 0.0;
 		double dt_source = 0.0;
+
 };
 
 double compute_dt(const Domain& domain, Time& time,
