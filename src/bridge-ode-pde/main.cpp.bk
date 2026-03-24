@@ -1,0 +1,195 @@
+
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <iomanip>
+#include <numeric>
+#include <fstream>
+#include <filesystem>
+
+class FvmSolver {
+public:
+    struct Config {
+        int Nm = 200;           // Number of cells
+        double T = 2.0;         // Final time
+        double CFL = 0.8;       // CFL number
+        int output_freq = 20;   // Output every N steps
+    };
+
+    FvmSolver(const Config& cfg) : cfg_(cfg) {
+        setup_grid();
+        precompute_coefficients();
+        initialize_solution();
+        create_output_dir();
+        write_initial_csv();
+    }
+
+    void solve_and_output() {
+        print_header();
+        
+        double t = 0.0;
+        int n = 0;
+        while (t < cfg_.T - 1e-10) {
+            double dt = compute_dt();
+            if (t + dt > cfg_.T) dt = cfg_.T - t;
+            
+            time_step(dt);
+            t += dt;
+            n++;
+            
+            if (n % cfg_.output_freq == 0 || t >= cfg_.T - 1e-10) {
+                write_csv(t, n);
+            }
+            
+            if (n % 50 == 0) {
+                print_status(t, n);
+            }
+        }
+        print_final_results();
+    }
+
+private:
+    Config cfg_;
+    double dm_;
+    std::vector<double> m_centers_, m_edges_, g_edges_, p_centers_, lambda_centers_;
+    std::vector<double> phi_, phi_new_, F_;
+
+    void setup_grid() {
+        dm_ = 1.0 / cfg_.Nm;
+        m_centers_.resize(cfg_.Nm);
+        m_edges_.resize(cfg_.Nm + 1);
+        g_edges_.resize(cfg_.Nm + 1);
+        
+        for (int i = 0; i <= cfg_.Nm; ++i) {
+            m_edges_[i] = i * dm_;
+        }
+        for (int i = 0; i < cfg_.Nm; ++i) {
+            m_centers_[i] = 0.5 * (m_edges_[i] + m_edges_[i + 1]);
+        }
+    }
+    
+    void precompute_coefficients() {
+        p_centers_.resize(cfg_.Nm);
+        lambda_centers_.resize(cfg_.Nm);
+        
+        for (int i = 0; i < cfg_.Nm; ++i) {
+            double m = m_centers_[i];
+            double gaussian_8 = std::exp(-8.0 * (m - 0.3) * (m - 0.3));
+            lambda_centers_[i] = 0.8 * gaussian_8;
+            p_centers_[i] = 0.2 * gaussian_8;
+        }
+        
+        for (int i = 0; i <= cfg_.Nm; ++i) {
+            double m = m_edges_[i];
+            g_edges_[i] = 0.5 * std::exp(-10.0 * (m - 0.3) * (m - 0.3));
+        }
+    }
+    
+    void initialize_solution() {
+        phi_.resize(cfg_.Nm);
+        phi_new_.resize(cfg_.Nm);
+        F_.resize(cfg_.Nm + 1);
+        
+        for (int i = 0; i < cfg_.Nm; ++i) {
+            double m = m_centers_[i];
+            phi_[i] = 2.0 * std::exp(-20.0 * (m - 0.1) * (m - 0.1));
+        }
+    }
+    
+    double compute_dt() const {
+        double g_max = 0.0;
+        for (double g : g_edges_) {
+            g_max = std::max(g_max, std::abs(g));
+        }
+        return cfg_.CFL * dm_ / (g_max > 1e-12 ? g_max : 1.0);
+    }
+    
+    void compute_fluxes() {
+        F_[0] = 0.0;  // No inflow
+        
+        for (int i = 0; i < cfg_.Nm; ++i) {
+            if (g_edges_[i + 1] >= 0.0) {
+                F_[i + 1] = g_edges_[i + 1] * phi_[i];
+            } else {
+                F_[i + 1] = g_edges_[i + 1] * phi_[i + 1];
+            }
+        }
+        
+        F_[cfg_.Nm] = g_edges_[cfg_.Nm] * phi_[cfg_.Nm - 1];
+    }
+    
+    void time_step(double dt) {
+        compute_fluxes();
+        double inv_dm_dt = dt / dm_;
+        
+        for (int i = 0; i < cfg_.Nm; ++i) {
+            double flux_div = (F_[i + 1] - F_[i]) * inv_dm_dt;
+            double source = dt * (p_centers_[i] - lambda_centers_[i]) * phi_[i];
+            phi_new_[i] = phi_[i] - flux_div + source;
+            phi_new_[i] = std::max(0.0, phi_new_[i]);
+        }
+        phi_ = phi_new_;
+    }
+    
+    double total_mass() const {
+        return std::reduce(phi_.begin(), phi_.end(), 0.0) * dm_;
+    }
+    
+    void create_output_dir() {
+        std::filesystem::create_directory("output");
+    }
+    
+    void write_csv(double t, int step) {
+        std::ofstream file("output/phi_t" + std::to_string(step) + ".csv");
+        file << "m,phi,g,lambda,p\n";
+        
+        for (int i = 0; i < cfg_.Nm; ++i) {
+            double m = m_centers_[i];
+            double g = 0.5 * std::exp(-10.0 * (m - 0.3) * (m - 0.3));
+            file << m << "," << phi_[i] << "," << g << "," 
+                 << lambda_centers_[i] << "," << p_centers_[i] << "\n";
+        }
+        file.close();
+    }
+    
+    void write_initial_csv() {
+        write_csv(0.0, 0);
+    }
+
+    void print_header() const {
+        std::cout << std::fixed << std::setprecision(6);
+        std::cout << "\n=== 1D FVM Ovarian Follicle Model ===\n";
+        std::cout << "Nm = " << cfg_.Nm << ", T = " << cfg_.T 
+                  << ", CFL = " << cfg_.CFL 
+                  << ", output_freq = " << cfg_.output_freq << "\n";
+        std::cout << "CSV files written to 'output/'\n\n";
+        std::cout << "Step\tTime\t\tMass\n";
+        std::cout << "------------------------\n";
+    }
+    
+    void print_status(double t, int n) const {
+        std::cout << std::setw(4) << n 
+                  << "\t" << std::setw(8) << t 
+                  << "\t" << std::setw(10) << total_mass() << "\n";
+    }
+    
+    void print_final_results() const {
+        std::cout << "\n======================\n";
+        std::cout << "Final mass: " << total_mass() << "\n";
+        std::cout << "CSV files ready for Python visualization in 'output/'\n";
+    }
+};
+
+int main() {
+    FvmSolver::Config cfg;
+    cfg.Nm = 2000;
+    cfg.T = 2.0;
+    cfg.CFL = 0.5;
+    cfg.output_freq = 20;
+    
+    FvmSolver solver(cfg);
+    solver.solve_and_output();
+    
+    return 0;
+}
+
