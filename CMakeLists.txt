@@ -12,5 +12,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # Ordner include als Include-Pfad hinzufügen
 # target_include_directories(include)
 
-add_subdirectory(src/hordyn)
-add_subdirectory(src/2d)
+# add_subdirectory(src/2d)
+# add_subdirectory(src/hordyn)
+# add_subdirectory(src/hordyn-parallel)
+# add_subdirectory(src/hordyn-2016-1cycle)
+# add_subdirectory(src/hordyn-2016-1cycle-gainVersion)
+add_subdirectory(src/bridge-ode-pde)
+# add_subdirectory(src/matplotplusplus)
