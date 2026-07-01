@@ -8,560 +8,658 @@
 #include <algorithm>
 
 struct MeshParams {
-    double m_min = -0.01; // left boundary
-    double m_max = +1.01; // right boundary
-    int Nm = 2500;       // Number of cells per follicle
+	double m_min = -0.01; // left boundary
+	double m_max = +1.01; // right boundary
+	int Nm = 5000;       // Number of cells per follicle
 };
 
 struct Grid {
-    std::vector<double> centers;
-    std::vector<double> edges;
-    double dm;
-    int Nm;
+	std::vector<double> centers;
+	std::vector<double> edges;
+	double dm;
+	int Nm;
 };
 
 Grid setup_grid(const MeshParams &mesh_params) {
-    Grid grid;
-    grid.edges.resize(mesh_params.Nm + 1);
-    grid.centers.resize(mesh_params.Nm);
+	Grid grid;
+	grid.edges.resize(mesh_params.Nm + 1);
+	grid.centers.resize(mesh_params.Nm);
 
-    const double dm = (mesh_params.m_max - mesh_params.m_min) / mesh_params.Nm;
+	const double dm = (mesh_params.m_max - mesh_params.m_min) / mesh_params.Nm;
 
-    grid.dm = dm;
-    grid.Nm = mesh_params.Nm;
+	grid.dm = dm;
+	grid.Nm = mesh_params.Nm;
 
-    for (int i = 0; i < mesh_params.Nm + 1; ++i) {
-        grid.edges[i] = mesh_params.m_min + i * dm;
-    }
-    for (int i = 0; i < mesh_params.Nm; ++i) {
-        grid.centers[i] = 0.5 * (grid.edges[i] + grid.edges[i + 1]);
-    }
+	for (int i = 0; i < mesh_params.Nm + 1; ++i) {
+		grid.edges[i] = mesh_params.m_min + i * dm;
+	}
+	for (int i = 0; i < mesh_params.Nm; ++i) {
+		grid.centers[i] = 0.5 * (grid.edges[i] + grid.edges[i + 1]);
+	}
 
-    return grid;
+	return grid;
 }
 
 struct TimeParams {
-    double T_end = 500.0;
-    double CFL = 0.8;
-    int output_frequency = 50;
+	double T_end = 10.0;
+	double CFL = 0.8;
+	int output_frequency = 10;
 };
-/*
+
+
 // Cow 419 - 2nd Wave
 struct BioParams {
-    double xi = 16.0;
-    double kappa_0 = 3.5;
-    double delta = 0.1 / 16.0; // TODO: 16.0 -> xi
-    double gamma_0 = 2.85;
-    double eta = 4.22;
-    double s_thr = 12.0;
-    double nu = 2.0;
-    double alpha_0 = 5.0;
-    double alpha_1 = 2.0;
-    double alpha_2 = 2.0;
-    double x_thr = 12.0;
+	double xi = 15.297;
+	double kappa_0 = 1.61786e-4;
+	double delta = 0.0; // TODO: 16.0 -> xi
+	double gamma_0 = 7.04742e-2;
+	double eta = 5.58122e-3;
+	double s_thr = 0.0;
+	double nu = 2.47539;
+	double alpha_0 = 0.033; //4e-2;
+	double alpha_1 = 0.0;
+	double alpha_2 = 0.0;
+	double x_thr = 0.0;
 };
-*/
 
 // PCOS
-struct BioParams {
-    double xi = 20.0;
-    double kappa_0 = 8.0;
-    double delta = 0.2 / 20.0; // TODO: 20.0 -> xi
-    double gamma_0 = 5.0;
-    double eta = 5.0;
-    double s_thr = 12.0;
-    double nu = 2.0;
-    double alpha_0 = 10.0;
-    double alpha_1 = 2.0;
-    double alpha_2 = 2.0;
-    double x_thr = 19.0;
-};
+/*
+   struct BioParams {
+   double xi = 20.0;
+   double kappa_0 = 8.0;
+   double delta = 0.2 / 20.0; // TODO: 20.0 -> xi
+   double gamma_0 = 5.0;
+   double eta = 5.0;
+   double s_thr = 12.0;
+   double nu = 2.0;
+   double alpha_0 = 10.0;
+   double alpha_1 = 2.0;
+   double alpha_2 = 2.0;
+   double x_thr = 19.0;
+   };
+ */
+
+/*
+   struct AymardParams {
+   double alpha_0 = 0.0;
+   double c1 = 0.0;
+   double kappa_0 = 0.0;
+   double sm = 0.0;
+   double sv = 0.0;
+   double Um = 0.0;
+   double UM = 0.0;
+   };
+ */
 
 struct Follicle {
-    // density
-    std::vector<double> phi_centers;
-    // mass
-    double x;
-    // stage
-    double s;
-    double s_bar;
-    // maturation or stage velocity
-    std::vector<double> g_edges;
-    // cell doubling minus apoptosis rate
-    double p_minus_lambda;
+	// density
+	std::vector<double> phi_centers;
+	// mass
+	double x;
+	// stage
+	double s;
+	double s_bar;
+	// maturation or stage velocity
+	std::vector<double> g_edges;
+	// cell doubling minus apoptosis rate
+	double p_minus_lambda;
 
-    Follicle(const MeshParams& mesh_params)
-        : phi_centers(mesh_params.Nm, 0.0)
-        , x(0.0)
-        , s(0.0)
-        , s_bar(0.0)
-        , g_edges(mesh_params.Nm + 1, 0.0)
-        , p_minus_lambda(0.0)
-    {}
+	Follicle(const MeshParams& mesh_params)
+		: phi_centers(mesh_params.Nm, 0.0)
+		  , x(0.0)
+		  , s(0.0)
+		  , s_bar(0.0)
+		  , g_edges(mesh_params.Nm + 1, 0.0)
+		  , p_minus_lambda(0.0)
+	{}
 };
 
 struct InitCondition {
-    struct MixtureComponent {
-        double mu, a, b;
-    };
+	struct MixtureComponent {
+		double mu, a, b;
+	};
 
-    std::vector<MixtureComponent> components;
+	std::vector<MixtureComponent> components;
 
-    InitCondition() : components({
-            // Cow 419 - 2nd Wave 
-            /*
-            {280.0, 0.0428571, 0.05714},
-            {42.0,  0.1428, 0.1904},
-            {297.294, 0.03834, 0.05112},
-            {0.6975,  0.7310, 0.97479}
-            */
-            // Cow 419 - 2nd Wave , a = (3/4) * b
-            /*
-            {50.0, 0.0100, 0.0900},
-            {8.0,  0.0416, 0.2916},
-            {60.0, 0.0130, 0.0764},
-            {2.0,  0.8104, 0.8954}
-            */
-            // PCOS
-            {20.5714, 0.0138889, 0.111111},
-            {32.3878, 0.0101449, 0.0811594},
-            {37.0286, 0.0092592, 0.0740741},
-            {37.0286, 0.0092592, 0.0740741}
-            }) {}
+	InitCondition() : components({
+			// Cow 419 - 2nd Wave 
+			/*
+			   {280.0, 0.0428571, 0.05714},
+			   {42.0,  0.1428, 0.1904},
+			   {297.294, 0.03834, 0.05112},
+			   {0.6975,  0.7310, 0.97479}
+			 */
+			// Cow 419 - 2nd Wave , a = (3/4) * b
+			// OLD
+			//{28.5706, 0.05123, 0.1537},
+			//{15.577,  0.0895804, 0.268741},
+			//{13.5773, 0.08582, 0.2574},
+			//{2.0,  0.8104, 0.8954}
+			{27.5045, 0.0530822, 0.159247},
+			{37.0671, 0.0376344, 0.112903},
+			{49.7782, 0.0235043, 0.0705128},
+			// PCOS
+			/*
+			   {20.5714, 0.0138889, 0.111111},
+			   {32.3878, 0.0101449, 0.0811594},
+			   {37.0286, 0.0092592, 0.0740741},
+			   {37.0286, 0.0092592, 0.0740741}
+			 */
+			// Aymard
+			/*
+			   {30.6593, 0.0196444, 0.0294666},
+			   {127.153, 0.0141222, 0.0211834 },
+			   {185.139, 0.00762731, 0.011441},
+			   {36.592, 0.00788692, 0.0118304}
+			 */
+	}) {}
 };
 
 void initialize_phi(const Grid& grid,
-                    const auto& init,
-                    std::vector<double>& phi_centers) {
+		const auto& init,
+		std::vector<double>& phi_centers) {
 
-    double mu = init.mu;
-    double a  = init.a;
-    double b  = init.b;
+	double mu = init.mu;
+	double a  = init.a;
+	double b  = init.b;
 
-    for (size_t j = 0; j < phi_centers.size(); ++j) {
-        if (grid.centers[j] >= a && grid.centers[j] <= b) {
-            phi_centers[j] = mu;
-        } else {
-            phi_centers[j] = 0.0;
-        }
-    }
+	for (size_t j = 0; j < phi_centers.size(); ++j) {
+		if (grid.centers[j] >= a && grid.centers[j] <= b) {
+			phi_centers[j] = mu;
+		} else {
+			phi_centers[j] = 0.0;
+		}
+	}
 }
 
 void compute_macros(const Grid& grid, const std::vector<double>& phi_centers,
-                    double &x, double &s, double &s_bar) {
-    x = 0.0;
-    s = 0.0;
-    for (size_t j = 0; j < phi_centers.size(); ++j) {
-        if (grid.centers[j] >= 0 && grid.centers[j] <= 1) {
-            x += phi_centers[j] * grid.dm;
-            s += grid.centers[j] * phi_centers[j] * grid.dm;
-        }
-    }
-    s_bar = (x > 0.0) ? s / x : 0.0;
+		double &x, double &s, double &s_bar) {
+	x = 0.0;
+	s = 0.0;
+	for (size_t j = 0; j < phi_centers.size(); ++j) {
+		if (grid.centers[j] >= 0 && grid.centers[j] <= 1) {
+			x += phi_centers[j] * grid.dm;
+			s += grid.centers[j] * phi_centers[j] * grid.dm;
+		}
+	}
+	s_bar = (x > 0.0) ? s / x : 0.0;
 }
 
 
 // g = x g_0 + s g_1
 /*
-void compute_g(const Grid& grid, const BioParams& bio_params,
-               const Follicle& follicle,
-               std::vector<double>& g_edges) {
+   void compute_g(const Grid& grid, const BioParams& bio_params,
+   const Follicle& follicle,
+   std::vector<double>& g_edges) {
 
-    const double alpha_0 = bio_params.alpha_0;
-    const double alpha_1 = bio_params.alpha_1;
-    const double alpha_2 = bio_params.alpha_2;
-    const double xi      = bio_params.xi;
-    const double x_thr   = bio_params.x_thr;
+   const double alpha_0 = bio_params.alpha_0;
+   const double alpha_1 = bio_params.alpha_1;
+   const double alpha_2 = bio_params.alpha_2;
+   const double xi      = bio_params.xi;
+   const double x_thr   = bio_params.x_thr;
 
-    const double x     = follicle.x;
-    const double s_bar = follicle.s_bar;
+   const double x     = follicle.x;
+   const double s_bar = follicle.s_bar;
 
-    double factor = std::pow((x / xi) - s_bar, alpha_1);
+   double factor = std::pow((x / xi) - s_bar, alpha_1);
 
-    double hill_f = std::pow(x, alpha_2) /
-                    (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
+   double hill_f = std::pow(x, alpha_2) /
+   (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
 
-    double base = alpha_0 * factor * hill_f;
-    for (size_t i = 0; i < grid.edges.size(); ++i) {
-        g_edges[i] = base * (x - grid.edges[i] * xi);
-    }
-}
-*/
+   double base = alpha_0 * factor * hill_f;
+   for (size_t i = 0; i < grid.edges.size(); ++i) {
+   g_edges[i] = base * (x - grid.edges[i] * xi);
+   }
+   }
+ */
 
 /*
 // g_1 = 0
 void compute_g(const Grid& grid, const BioParams& bio_params,
-               const Follicle& follicle,
-               std::vector<double>& g_edges) {
+const Follicle& follicle,
+std::vector<double>& g_edges) {
 
-    const double alpha_0 = bio_params.alpha_0;
-    const double alpha_1 = bio_params.alpha_1;
-    const double alpha_2 = bio_params.alpha_2;
-    const double xi      = bio_params.xi;
-    const double x_thr   = bio_params.x_thr;
+const double alpha_0 = bio_params.alpha_0;
+const double alpha_1 = bio_params.alpha_1;
+const double alpha_2 = bio_params.alpha_2;
+const double xi      = bio_params.xi;
+const double x_thr   = bio_params.x_thr;
 
-    const double x     = follicle.x;
-    const double s_bar = follicle.s_bar;
+const double x     = follicle.x;
+const double s_bar = follicle.s_bar;
 
-    double prefactor_1 = xi * alpha_0;
-    double prefactor_2 = std::pow((x / xi) - s_bar, alpha_1+1);
-    double hill_f = std::pow(x, alpha_2) / (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
+double prefactor_1 = xi * alpha_0;
+double prefactor_2 = std::pow((x / xi) - s_bar, alpha_1+1);
+double hill_f = std::pow(x, alpha_2) / (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
 
-    //double base = alpha_0 * factor * hill_f;
-    double base = prefactor_1 * prefactor_2 * hill_f;
-    for (size_t i = 0; i < grid.edges.size(); ++i) {
-        g_edges[i] = base;
-    }
+//double base = alpha_0 * factor * hill_f;
+double base = prefactor_1 * prefactor_2 * hill_f;
+for (size_t i = 0; i < grid.edges.size(); ++i) {
+g_edges[i] = base;
 }
-*/
+}
+ */
 
 /*
 // g_0 = 0 
 void compute_g(const Grid& grid, const BioParams& bio_params,
-               const Follicle& follicle,
-               std::vector<double>& g_edges) {
+const Follicle& follicle,
+std::vector<double>& g_edges) {
 
-    const double alpha_0 = bio_params.alpha_0;
-    const double alpha_1 = bio_params.alpha_1;
-    const double alpha_2 = bio_params.alpha_2;
-    const double xi      = bio_params.xi;
-    const double x_thr   = bio_params.x_thr;
+const double alpha_0 = bio_params.alpha_0;
+const double alpha_1 = bio_params.alpha_1;
+const double alpha_2 = bio_params.alpha_2;
+const double xi      = bio_params.xi;
+const double x_thr   = bio_params.x_thr;
 
-    const double x     = follicle.x;
-    const double s_bar = follicle.s_bar;
+const double x     = follicle.x;
+const double s_bar = follicle.s_bar;
 
-    double prefactor_1 = xi * alpha_0;
-    double prefactor_2 = std::pow((x / xi) - s_bar, alpha_1+1);
-    double hill_f = std::pow(x, alpha_2+1.0) / (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
+double prefactor_1 = xi * alpha_0;
+double prefactor_2 = std::pow((x / xi) - s_bar, alpha_1+1);
+double hill_f = std::pow(x, alpha_2+1.0) / (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
 
-    //double base = alpha_0 * factor * hill_f;
-    double base = prefactor_1 * prefactor_2 * hill_f;
-    for (size_t i = 0; i < grid.edges.size(); ++i) {
-        g_edges[i] = base  * (grid.edges[i] / (s_bar * x)) ;
-    }
+//double base = alpha_0 * factor * hill_f;
+double base = prefactor_1 * prefactor_2 * hill_f;
+for (size_t i = 0; i < grid.edges.size(); ++i) {
+g_edges[i] = base  * (grid.edges[i] / (s_bar * x)) ;
 }
-*/
+}
+ */
 
 
 void compute_g(const Grid& grid, const BioParams& bio_params,
-               const Follicle& follicle,
-               std::vector<double>& g_edges) {
+		const Follicle& follicle,
+		std::vector<double>& g_edges) {
 
-    const double alpha_0 = bio_params.alpha_0;
-    const double alpha_1 = bio_params.alpha_1;
-    const double alpha_2 = bio_params.alpha_2;
-    const double xi      = bio_params.xi;
-    const double x_thr   = bio_params.x_thr;
+	const double alpha_0 = bio_params.alpha_0;
+	const double alpha_1 = bio_params.alpha_1;
+	const double alpha_2 = bio_params.alpha_2;
+	const double xi      = bio_params.xi;
+	const double x_thr   = bio_params.x_thr;
 
-    const double x     = follicle.x;
-    const double s_bar = follicle.s_bar;
+	const double x     = follicle.x;
+	const double s_bar = follicle.s_bar;
 
-    double factor = std::pow((x / xi) - s_bar, alpha_1);
 
-    double hill_f = std::pow(x, alpha_2) /
-                    (std::pow(x, alpha_2) + std::pow(x_thr, alpha_2));
-
-    double base = alpha_0 * factor * hill_f;
-    double beta = 0.05;
-    for (size_t i = 0; i < grid.edges.size(); ++i) {
-        g_edges[i] = base * (x - grid.edges[i] * xi) - beta * (1.0 - (x/xi)) * (x/xi) * (s_bar - grid.edges[i]);
-    }
+	double sigma = 0.0;//0.012; //0.00266667;
+	for (size_t i = 0; i < grid.edges.size(); ++i) {
+		g_edges[i] = alpha_0 * (1.0 - grid.edges[i]) * x * s_bar - sigma * (xi - x) * (s_bar - grid.edges[i]);
+	}
 }
 
+// Aymard
+/*
+   void compute_g_Aymard(const Grid& grid, const BioParams& bio_params,
+   const std::vector<Follicle>& follicles,
+   int fol_id,
+   const std::vector<AymardParams>& aymard_params,
+   std::vector<double>& g_edges) {
+
+//const double c1 = 1.0/10.0;
+const double c1 = aymard_params[fol_id].c1;
+double term1 = 0.0;
+double s_bar_sum = 0.0;
+const int Nf = 4; // TODO: Check if the number of follicles is correct!
+
+const double x_i = follicles[fol_id].x;
+const double s_i = follicles[fol_id].s;
+
+for (const auto& f : follicles) {
+s_bar_sum +=  f.s_bar;
+}
+
+term1 = (1.0 - c1) * (1.0 / Nf) * s_bar_sum;
+
+for (size_t i = 0; i < grid.edges.size(); ++i) {
+g_edges[i] = term1 + grid.edges[i] * ( -(s_i/x_i) + c1 * (1.0/Nf) * s_bar_sum );
+}
+}
+ */
+
+// Aymard
+/*
+   void compute_p_minus_lambda(const BioParams& bio_params,
+   const std::vector<Follicle>& follicles,
+   int i,
+   const std::vector<AymardParams>& aymard_params,
+   double& p_minus_lambda) {
+
+// constants
+const double kappa_0 = aymard_params[i].kappa_0; // 3.0/10.0;
+const double sm = aymard_params[i].sm; // 9.0/10.0;
+const double sv = aymard_params[i].sv; // 1.0/20.0;
+const double UM = aymard_params[i].UM; // 3.0/20.0;
+const double Um = aymard_params[i].Um; // 3.0/40.0;
+
+// p constants
+const double alpha_0 = aymard_params[i].alpha_0; // 6.0/5.0;
+
+// common to Lambda and p
+const Follicle& follicle_i = follicles[i];
+const double s_bar = follicle_i.s_bar;
+const int Nf = 4; // TODO: Check if the number of follciles is correct!
+
+const double p = alpha_0 * (1.0 - s_bar) * std::log(2);
+
+const double lambda_factor = kappa_0 * exp(-1.0 * std::pow((s_bar - sm)/(sv),2.0)) * (1.0 - Um/UM) * (1.0/Nf);
+double lambda_sum = 0.0;
+for (const auto& f : follicles) {
+lambda_sum += f.s_bar;
+}
+const double lambda = lambda_factor * lambda_sum;
+
+p_minus_lambda = p - lambda;
+}
+ */
+
 void compute_p_minus_lambda(const BioParams& bio_params,
-                            const std::vector<Follicle>& follicles,
-                            int i,
-                            double& p_minus_lambda) {
+		const std::vector<Follicle>& follicles,
+		int i,
+		double& p_minus_lambda) {
 
-    const Follicle& follicle_i = follicles[i];
-    const double x_i = follicle_i.x;
-    const double s_i = follicle_i.s;
+	const Follicle& follicle_i = follicles[i];
+	const double x_i = follicle_i.x;
+	const double s_i = follicle_i.s;
 
-    const double xi      = bio_params.xi;
-    const double nu      = bio_params.nu;
-    const double delta   = bio_params.delta;
-    const double gamma_0 = bio_params.gamma_0;
-    const double s_thr   = bio_params.s_thr;
-    const double kappa_0 = bio_params.kappa_0;
-    const double eta_0   = bio_params.eta;  // assuming eta_0 = eta
+	const double xi      = bio_params.xi;
+	const double nu      = bio_params.nu;
+	const double delta   = bio_params.delta;
+	const double gamma_0 = bio_params.gamma_0;
+	const double s_thr   = bio_params.s_thr;
+	const double kappa_0 = bio_params.kappa_0;
+	const double eta_0   = bio_params.eta;  // assuming eta_0 = eta
 
-    double prefactor = (1.0 / std::pow(xi, nu - 1.0)) * std::pow(xi - x_i, nu);
+	double prefactor = std::pow(xi - x_i, 1);
 
-    double sum_other = 0.0;
-    for (size_t j = 0; j < follicles.size(); ++j) {
-        if (j != static_cast<size_t>(i)) {
-            sum_other += follicles[j].x * follicles[j].s / xi;
-        }
-    }
+	double sum_other = 0.0;
+	for (size_t j = 0; j < follicles.size(); ++j) {
+		if (j != static_cast<size_t>(i)) {
+			sum_other += std::pow(follicles[j].x, nu);
+		}
+	}
 
-    double term1 = -delta;
-    double term2 = gamma_0 * s_i / (s_thr + s_i);
-    double term3_base   = (kappa_0 / xi) * (1.0 - x_i / xi) * (x_i / xi);
-    double term3_inside = eta_0 * (s_i / xi) * x_i + sum_other;
-    double term3 = -term3_base * term3_inside;
+	double term2 = gamma_0;
+	double term3_base   = kappa_0;
+	double term3_inside = eta_0 * std::pow(x_i, nu)  + sum_other;
+	double term3 = -term3_base * term3_inside;
 
-    double bracket = term1 + term2 + term3;
+	double bracket = term2 + term3;
 
-    p_minus_lambda = prefactor * bracket;
+	p_minus_lambda = prefactor * bracket;
 }
 
 // compute RHS: dphi/dt = -(fluxR - fluxL)/dm + source
 // using an upwind numerical flux
 void compute_rhs(const Grid& grid,
-                 const BioParams& bio_params,
-                 std::vector<Follicle>& follicles,
-                 std::vector<std::vector<double>>& rhs_phi) {
-    int Nf = follicles.size();
+		const BioParams& bio_params,
+		std::vector<Follicle>& follicles,
+		std::vector<std::vector<double>>& rhs_phi 
+		) {
+	int Nf = follicles.size();
 
-    // update macros, g, p_minus_lambda for all follicles
-    for (int i = 0; i < Nf; ++i) {
-        compute_macros(grid, follicles[i].phi_centers,
-                       follicles[i].x, follicles[i].s, follicles[i].s_bar);
-        compute_g(grid, bio_params, follicles[i], follicles[i].g_edges);
-        compute_p_minus_lambda(bio_params, follicles, i, follicles[i].p_minus_lambda);
-    }
+	// update macros, g, p_minus_lambda for all follicles
+	for (int i = 0; i < Nf; ++i) {
+		compute_macros(grid, follicles[i].phi_centers,
+				follicles[i].x, follicles[i].s, follicles[i].s_bar);
+		compute_g(grid, bio_params, follicles[i], follicles[i].g_edges);
+		//compute_g_Aymard(grid, bio_params, follicles, i, aymard_params, follicles[i].g_edges);
+		compute_p_minus_lambda(bio_params, follicles, i, follicles[i].p_minus_lambda);
+	}
 
-    rhs_phi.assign(Nf, std::vector<double>(grid.Nm, 0.0));
+	rhs_phi.assign(Nf, std::vector<double>(grid.Nm, 0.0));
 
-    for (int i = 0; i < Nf; ++i) {
-        auto& phi  = follicles[i].phi_centers;
-        auto& g    = follicles[i].g_edges;
-        auto& rhs  = rhs_phi[i];
-        double pml = follicles[i].p_minus_lambda;
+	for (int i = 0; i < Nf; ++i) {
+		auto& phi  = follicles[i].phi_centers;
+		auto& g    = follicles[i].g_edges;
+		auto& rhs  = rhs_phi[i];
+		double pml = follicles[i].p_minus_lambda;
 
-        for (int j = 0; j < grid.Nm; ++j) {
-            double flux_left  = 0.0;
-            double flux_right = 0.0;
+		for (int j = 0; j < grid.Nm; ++j) {
+			double flux_left  = 0.0;
+			double flux_right = 0.0;
 
-            // left interface j (between cells j-1 and j)
-            if (j > 0) {
-                double gL = g[j];
-                double phi_up_L = (gL >= 0.0) ? phi[j-1] : phi[j];
-                flux_left = gL * phi_up_L;
-            }
+			// left interface j (between cells j-1 and j)
+			if (j > 0) {
+				double gL = g[j];
+				double phi_up_L = (gL >= 0.0) ? phi[j-1] : phi[j];
+				flux_left = gL * phi_up_L;
+			}
 
-            // right interface j+1 (between cells j and j+1)
-            if (j < grid.Nm - 1) {
-                double gR = g[j+1];
-                double phi_up_R = (gR >= 0.0) ? phi[j] : phi[j+1];
-                flux_right = gR * phi_up_R;
-            }
+			// right interface j+1 (between cells j and j+1)
+			if (j < grid.Nm - 1) {
+				double gR = g[j+1];
+				double phi_up_R = (gR >= 0.0) ? phi[j] : phi[j+1];
+				flux_right = gR * phi_up_R;
+			}
 
-            double source = pml * phi[j];
+			double source = pml * phi[j];
 
-            rhs[j] = ((-flux_right + flux_left) / grid.dm + source);
-        }
-    }
+			rhs[j] = ((-flux_right + flux_left) / grid.dm + source);
+		}
+	}
 }
 
 void rk4_step(const Grid& grid,
-              const BioParams& bio_params,
-              std::vector<Follicle>& follicles,
-              double dt) {
-    int Nf = follicles.size();
-    int Nm = grid.Nm;
+		const BioParams& bio_params,
+		std::vector<Follicle>& follicles,
+		double dt
+	     ) {
+	int Nf = follicles.size();
+	int Nm = grid.Nm;
 
-    std::vector<std::vector<double>> k1(Nf, std::vector<double>(Nm));
-    std::vector<std::vector<double>> k2(Nf, std::vector<double>(Nm));
-    std::vector<std::vector<double>> k3(Nf, std::vector<double>(Nm));
-    std::vector<std::vector<double>> k4(Nf, std::vector<double>(Nm));
-    std::vector<std::vector<double>> phi_backup(Nf, std::vector<double>(Nm));
+	std::vector<std::vector<double>> k1(Nf, std::vector<double>(Nm));
+	std::vector<std::vector<double>> k2(Nf, std::vector<double>(Nm));
+	std::vector<std::vector<double>> k3(Nf, std::vector<double>(Nm));
+	std::vector<std::vector<double>> k4(Nf, std::vector<double>(Nm));
+	std::vector<std::vector<double>> phi_backup(Nf, std::vector<double>(Nm));
 
-    for (int i = 0; i < Nf; ++i)
-        phi_backup[i] = follicles[i].phi_centers;
+	for (int i = 0; i < Nf; ++i)
+		phi_backup[i] = follicles[i].phi_centers;
 
-    // k1
-    compute_rhs(grid, bio_params, follicles, k1);
+	// k1
+	compute_rhs(grid, bio_params, follicles, k1);
 
-    // k2
-    for (int i = 0; i < Nf; ++i)
-        for (int j = 0; j < Nm; ++j)
-            follicles[i].phi_centers[j] = phi_backup[i][j] + 0.5 * dt * k1[i][j];
-    compute_rhs(grid, bio_params, follicles, k2);
+	// k2
+	for (int i = 0; i < Nf; ++i)
+		for (int j = 0; j < Nm; ++j)
+			follicles[i].phi_centers[j] = phi_backup[i][j] + 0.5 * dt * k1[i][j];
+	compute_rhs(grid, bio_params, follicles, k2);
 
-    // k3
-    for (int i = 0; i < Nf; ++i)
-        for (int j = 0; j < Nm; ++j)
-            follicles[i].phi_centers[j] = phi_backup[i][j] + 0.5 * dt * k2[i][j];
-    compute_rhs(grid, bio_params, follicles, k3);
+	// k3
+	for (int i = 0; i < Nf; ++i)
+		for (int j = 0; j < Nm; ++j)
+			follicles[i].phi_centers[j] = phi_backup[i][j] + 0.5 * dt * k2[i][j];
+	compute_rhs(grid, bio_params, follicles, k3);
 
-    // k4
-    for (int i = 0; i < Nf; ++i)
-        for (int j = 0; j < Nm; ++j)
-            follicles[i].phi_centers[j] = phi_backup[i][j] + dt * k3[i][j];
-    compute_rhs(grid, bio_params, follicles, k4);
+	// k4
+	for (int i = 0; i < Nf; ++i)
+		for (int j = 0; j < Nm; ++j)
+			follicles[i].phi_centers[j] = phi_backup[i][j] + dt * k3[i][j];
+	compute_rhs(grid, bio_params, follicles, k4);
 
-    // combine
-    for (int i = 0; i < Nf; ++i)
-        for (int j = 0; j < Nm; ++j)
-            follicles[i].phi_centers[j] =
-                phi_backup[i][j]
-                + dt * (k1[i][j] + 2.0*k2[i][j] + 2.0*k3[i][j] + k4[i][j]) / 6.0;
+	// combine
+	for (int i = 0; i < Nf; ++i)
+		for (int j = 0; j < Nm; ++j)
+			follicles[i].phi_centers[j] =
+				phi_backup[i][j]
+				+ dt * (k1[i][j] + 2.0*k2[i][j] + 2.0*k3[i][j] + k4[i][j]) / 6.0;
 }
 
 int main() {
-    // Define Mesh
-    const MeshParams mesh_params;
-    Grid grid = setup_grid(mesh_params);
+	// Define Mesh
+	const MeshParams mesh_params;
+	Grid grid = setup_grid(mesh_params);
 
-    // Simulation parameters
-    const BioParams bio_params;
+	// Simulation parameters
+	const BioParams bio_params;
 
-    // Number of follicles
-    int Nf = 4;
-    std::vector<Follicle> follicles;
-    follicles.reserve(Nf);
-    for (int i = 0; i < Nf; ++i) {
-        follicles.emplace_back(mesh_params);
-    }
+	// Number of follicles
+	int Nf = 3;
+	std::vector<Follicle> follicles;
+	follicles.reserve(Nf);
 
-    InitCondition init_condition;
 
-    for (int fol_idx = 0; fol_idx < Nf; ++fol_idx) {
-        initialize_phi(grid, init_condition.components[fol_idx],
-                       follicles[fol_idx].phi_centers);
-    }
+	/*
+	   std::vector<AymardParams> aymard_params = {
+	   { .alpha_0 = 5.4/5.0, .c1 = (0.9/10.0), .kappa_0 = 5.5/10.0, .sm = 9.99/10.0, .sv = 1.0/15.0, .Um = 3.0/40.0, .UM = 3.0/20.0 },
+	   { .alpha_0 = 6.0/5.0, .c1 = 1.0/10.0, .kappa_0 = 3.0/10.0, .sm = 9.0/10.0, .sv = 1.0/20.0, .Um = 3.0/40.0, .UM = 3.0/20.0 },
+	   { .alpha_0 = 6.0/5.0, .c1 = 1.0/10.0, .kappa_0 = 3.0/10.0, .sm = 9.0/10.0, .sv = 1.0/20.0, .Um = 3.0/40.0, .UM = 3.0/20.0 },
+	   { .alpha_0 = 5.4/5.0, .c1 = (0.9/10.0), .kappa_0 = 5.5/10.0, .sm = 9.99/10.0, .sv = 1.0/15.0, .Um = 3.0/40.0, .UM = 3.0/20.0 }
+	   };
+	 */
 
-    // Calculate mass (x) and stage (s)
-    for (auto& follicle : follicles) {
-        compute_macros(grid, follicle.phi_centers,
-                       follicle.x, follicle.s, follicle.s_bar);
-    }
+	for (int i = 0; i < Nf; ++i) {
+		follicles.emplace_back(mesh_params);
+	}
 
-    for (auto& follicle : follicles) {
-        compute_g(grid, bio_params, follicle, follicle.g_edges);
-    }
 
-    for (int i = 0; i < Nf; ++i) {
-        compute_p_minus_lambda(bio_params, follicles,
-                               i, follicles[i].p_minus_lambda);
-    }
+	InitCondition init_condition;
 
-    TimeParams time_params;
-    double t = 0.0;
+	for (int fol_idx = 0; fol_idx < Nf; ++fol_idx) {
+		initialize_phi(grid, init_condition.components[fol_idx],
+				follicles[fol_idx].phi_centers);
+	}
 
-    std::filesystem::create_directories("pcos");
-    std::ofstream case_file("pcos/case_log.csv");
-    if (!case_file) {
-        std::cerr << "Error: could not open case_log.csv for writing.\n";
-        return 1;
-    }
-    std::ofstream phi0_file("pcos/phi0.csv");
-    if (!phi0_file) {
-        std::cerr << "Error: could not open phi0.csv for writing.\n";
-        return 1;
-    }
-    std::ofstream phi1_file("pcos/phi1.csv");
-    if (!phi1_file) {
-        std::cerr << "Error: could not open phi1.csv for writing.\n";
-        return 1;
-    }
-    std::ofstream phi2_file("pcos/phi2.csv");
-    if (!phi2_file) {
-        std::cerr << "Error: could not open phi2.csv for writing.\n";
-        return 1;
-    }
-    std::ofstream phi3_file("pcos/phi3.csv");
-    if (!phi3_file) {
-        std::cerr << "Error: could not open phi3.csv for writing.\n";
-        return 1;
-    }
+	// Calculate mass (x) and stage (s)
+	for (auto& follicle : follicles) {
+		compute_macros(grid, follicle.phi_centers,
+				follicle.x, follicle.s, follicle.s_bar);
+	}
 
-    case_file << "t,dt,max_g,x0,s0,x1,s1,x2,s2,x3,s3\n";
+	for (auto& follicle : follicles) {
+		compute_g(grid, bio_params, follicle, follicle.g_edges);
+	}
 
-    static std::vector<std::vector<double>> phi0_history;
-    static std::vector<std::vector<double>> phi1_history;
-    static std::vector<std::vector<double>> phi2_history;
-    static std::vector<std::vector<double>> phi3_history;
+	//	for (int i = 0; i < Nf; i++) 
+	//		compute_g_Aymard(grid, bio_params, follicles, i, aymard_params, follicles[i].g_edges);
 
-    phi0_history.push_back(follicles[0].phi_centers);
-    phi1_history.push_back(follicles[1].phi_centers);
-    phi2_history.push_back(follicles[2].phi_centers);
-    phi3_history.push_back(follicles[3].phi_centers);
+	for (int i = 0; i < Nf; ++i) {
+		compute_p_minus_lambda(bio_params, follicles,
+				i, follicles[i].p_minus_lambda);
+	}
 
-    int step = 0;
-    while (t < time_params.T_end) {
-        // recompute g and p_minus_lambda to estimate safe dt
-        double max_g = 0.0;
-        double min_pml = 0.0;
-        for (const auto& f : follicles) {
-            for (double gval : f.g_edges)
-                max_g = std::max(max_g, std::fabs(gval));
-            min_pml = std::min(min_pml, f.p_minus_lambda);
-        }
+	TimeParams time_params;
+	double t = 0.0;
 
-        double dt = time_params.CFL * grid.dm / (max_g + 1e-12);
+	std::filesystem::create_directories("cow-beta0-0");
+	std::ofstream case_file("cow-beta0-0/case_log.csv");
+	std::ofstream phi0_file("cow-beta0-0/phi0.csv");
+	std::ofstream phi1_file("cow-beta0-0/phi1.csv");
+	std::ofstream phi2_file("cow-beta0-0/phi2.csv");
+	if (!case_file) {
+		std::cerr << "Error: could not open case_log.csv for writing.\n";
+		return 1;
+	}
+	if (!phi0_file) {
+		std::cerr << "Error: could not open phi0.csv for writing.\n";
+		return 1;
+	}
+	if (!phi1_file) {
+		std::cerr << "Error: could not open phi1.csv for writing.\n";
+		return 1;
+	}
+	if (!phi2_file) {
+		std::cerr << "Error: could not open phi2.csv for writing.\n";
+		return 1;
+	}
+	//std::ofstream phi3_file("cow-beta0-0/phi3.csv");
+	//if (!phi3_file) {
+	//	std::cerr << "Error: could not open phi3.csv for writing.\n";
+	//	return 1;
+	//}
 
-        // additional restriction from reaction term p_minus_lambda
-        if (min_pml < 0.0) {
-            double dt_react = -0.5 / min_pml; // safety factor 0.5
-            dt = std::min(dt, dt_react);
-        }
+	case_file << "t,dt,max_g,x0,s0,x1,s1,x2,s2\n";
 
-        dt = std::clamp(dt, 1e-6, 1e-2);
+	static std::vector<std::vector<double>> phi0_history;
+	static std::vector<std::vector<double>> phi1_history;
+	static std::vector<std::vector<double>> phi2_history;
+	//static std::vector<std::vector<double>> phi3_history;
 
-        rk4_step(grid, bio_params, follicles, dt);
+	phi0_history.push_back(follicles[0].phi_centers);
+	phi1_history.push_back(follicles[1].phi_centers);
+	phi2_history.push_back(follicles[2].phi_centers);
+	//phi3_history.push_back(follicles[3].phi_centers);
 
-        t += dt;
-        step++;
+	int step = 0;
+	while (t < time_params.T_end) {
+		// recompute g and p_minus_lambda to estimate safe dt
+		double max_g = 0.0;
+		double min_pml = 0.0;
+		for (const auto& f : follicles) {
+			for (double gval : f.g_edges)
+				max_g = std::max(max_g, std::fabs(gval));
+			min_pml = std::min(min_pml, f.p_minus_lambda);
+		}
 
-        if (step % time_params.output_frequency == 0) {
-            std::cout << "t = " << std::setw(8) << t
-                      << "  dt = " << std::scientific << dt
-                      << " x0 = " << follicles[0].x << "  "
-                      << " s0 = " << follicles[0].s << "  "
-                      << " x1 = " << follicles[1].x << "  "
-                      << " s1 = " << follicles[1].s << "  "
-                      << " x2 = " << follicles[2].x << "  "
-                      << " s2 = " << follicles[2].s << "  "
-                      << " x3 = " << follicles[3].x << "  "
-                      << " s3 = " << follicles[3].s << "  "
-                      << "\n";
-        }
+		double dt = time_params.CFL * grid.dm / (max_g + 1e-12);
 
-        if (step % time_params.output_frequency == 0) {
-            case_file << t << "," << dt << "," << max_g << ","
-                      << follicles[0].x << "," << follicles[0].s << ","
-                      << follicles[1].x << "," << follicles[1].s << ","
-                      << follicles[2].x << "," << follicles[2].s << ","
-                      << follicles[3].x << "," << follicles[3].s << 
-                      "\n";
-        }
+		// additional restriction from reaction term p_minus_lambda
+		if (min_pml < 0.0) {
+			double dt_react = -0.5 / min_pml; // safety factor 0.5
+			dt = std::min(dt, dt_react);
+		}
 
-        if (step % time_params.output_frequency == 0) {
-            phi0_history.push_back(follicles[0].phi_centers);
-            phi1_history.push_back(follicles[1].phi_centers);
-            phi2_history.push_back(follicles[2].phi_centers);
-            phi3_history.push_back(follicles[3].phi_centers);
-        }
-    }
+		dt = std::clamp(dt, 1e-6, 1e-2);
 
-    auto write_phi_csv = [&](std::ofstream& file,
-                             const std::vector<std::vector<double>>& history) {
-        file << "m";
-        for (std::size_t k = 0; k < history.size(); ++k)
-            file << ",phi_t" << k;
-        file << "\n";
+		rk4_step(grid, bio_params, follicles, dt);
 
-        for (int j = 0; j < grid.Nm; ++j) {
-            file << grid.centers[j];
-            for (const auto& snapshot : history)
-                file << "," << snapshot[j];
-            file << "\n";
-        }
-    };
+		t += dt;
+		step++;
 
-    write_phi_csv(phi0_file, phi0_history);
-    write_phi_csv(phi1_file, phi1_history);
-    write_phi_csv(phi2_file, phi2_history);
-    write_phi_csv(phi3_file, phi3_history);
+		if (step % time_params.output_frequency == 0) {
+			std::cout << "t = " << std::setw(8) << t
+				<< "  dt = " << std::scientific << dt
+				<< " x0 = " << follicles[0].x << "  "
+				<< " s0 = " << follicles[0].s << "  "
+				<< " x1 = " << follicles[1].x << "  "
+				<< " s1 = " << follicles[1].s << "  "
+				<< " x2 = " << follicles[2].x << "  "
+				<< " s2 = " << follicles[2].s << "  "
+				<< "\n";
+		}
 
-    case_file.close();
-    phi0_file.close();
-    phi1_file.close();
-    phi2_file.close();
-    phi3_file.close();
+		if (step % time_params.output_frequency == 0) {
+			case_file << t << "," << dt << "," << max_g << ","
+				<< follicles[0].x << "," << follicles[0].s << ","
+				<< follicles[1].x << "," << follicles[1].s << ","
+				<< follicles[2].x << "," << follicles[2].s << 
+				"\n";
+		}
 
-    return 0;
+		if (step % time_params.output_frequency == 0) {
+			phi0_history.push_back(follicles[0].phi_centers);
+			phi1_history.push_back(follicles[1].phi_centers);
+			phi2_history.push_back(follicles[2].phi_centers);
+		}
+	}
+
+	auto write_phi_csv = [&](std::ofstream& file,
+			const std::vector<std::vector<double>>& history) {
+		file << "m";
+		for (std::size_t k = 0; k < history.size(); ++k)
+			file << ",phi_t" << k;
+		file << "\n";
+
+		for (int j = 0; j < grid.Nm; ++j) {
+			file << grid.centers[j];
+			for (const auto& snapshot : history)
+				file << "," << snapshot[j];
+			file << "\n";
+		}
+	};
+
+	write_phi_csv(phi0_file, phi0_history);
+	write_phi_csv(phi1_file, phi1_history);
+	write_phi_csv(phi2_file, phi2_history);
+	//write_phi_csv(phi3_file, phi3_history);
+
+	case_file.close();
+	phi0_file.close();
+	phi1_file.close();
+	phi2_file.close();
+	//phi3_file.close();
+
+	return 0;
 }
 
