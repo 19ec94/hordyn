@@ -1,9 +1,13 @@
 # hordyn
-Study ovarian follicle devlopment due to hormone dynamics
+This project is about ovarian follicle devlopment in mammals due to interaction with various hormones. The complex dynamics between the hormones and their effect on follicles development is the central theme. This repository contains source code for simulations produced in the research papers.
 
 # Bridge PDE/ODE Project
 
-This project is a bridge PDE/ODE application built with CMake, C++, and Python.
+This project is a bridge PDE/ODE application built with CMake, C++, and Python. You can find the source code of this project under 
+
+```bash
+src/bridge-ode-pde
+```
 
 ## Requirements
 
@@ -33,3 +37,5 @@ cmake --build build ..
 | --- | --- |
 | Dr. Edilbert Christhuraj | [edilbert.christhuraj@hs-anhalt..de](mailto:edilbert.christhuraj@hs-anhalt.de) |
 | Prof. Alexander Lange | [alexander.lange@hs-anhalt.de](mailto:alexander.lange@hs-anhalt.de) |
+| Dr. Claudio Iuliano | [claudio.iuliano@hs-anhalt..de](mailto:claudio.iuliano@hs-anhalt.de) |
+
