@@ -9,7 +9,7 @@
 struct MeshParams {
     double m_min = 0.0;
     double m_max = 1.0;
-    int Nm = 100000;
+    int Nm = 2000;
 };
 
 
