@@ -1,9 +1,13 @@
 # Follicular Dynamics
-This project is about ovarian follicle devlopment in mammals due to interaction with various hormones. The complex dynamics between the hormones and their effect on follicles development is the central theme. This repository contains source code for simulations produced in the attached research paper.
+This project studies ovarian follicle development in mammals in response to interactions between various hormones. The complex dynamics between hormones and their effects on follicular development are the central theme of this work.
+
+This repository contains the source code for the simulations presented in the accompanying research paper.
 
 # Bridge between PDE and ODE Models
 
-This repository contains simulations using PDE as well as corresponding ODE models. Furthermore, this application is built with CMake, C++, and Python. You can find the source code of this project under 
+This repository contains simulations based on PDE models as well as their corresponding ODE models. The application is built using CMake, C++, and Python.
+
+The source code for this project can be found under:
 
 ```bash
 src/bridge-ode-pde
@@ -15,18 +19,20 @@ src/bridge-ode-pde
 - C++
 - Python
 
-## How to run
+## How to compile?
 
-From the project root:
+From the project root,run:
 
 ```bash
 mkdir build
-cd build
-cmake --build build ..
+cmake -S . -B build
+cmake --build build
 ```
+This will configure the project in the `build` directory and then compile the application.
 
 ## Run the code
 
+After building the project, run the binary:
 ```bash
 ./bin/bridge-pde-ode
 ```
