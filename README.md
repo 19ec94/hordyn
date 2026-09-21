@@ -1,9 +1,9 @@
-# hordyn
-This project is about ovarian follicle devlopment in mammals due to interaction with various hormones. The complex dynamics between the hormones and their effect on follicles development is the central theme. This repository contains source code for simulations produced in the research papers.
+# Follicular Dynamics
+This project is about ovarian follicle devlopment in mammals due to interaction with various hormones. The complex dynamics between the hormones and their effect on follicles development is the central theme. This repository contains source code for simulations produced in the attached research paper.
 
-# Bridge PDE/ODE Project
+# Bridge between PDE and ODE Models
 
-This project is a bridge PDE/ODE application built with CMake, C++, and Python. You can find the source code of this project under 
+This repository contains simulations using PDE as well as corresponding ODE models. Furthermore, this application is built with CMake, C++, and Python. You can find the source code of this project under 
 
 ```bash
 src/bridge-ode-pde
