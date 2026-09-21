@@ -96,21 +96,41 @@ struct InitCondition {
           }) {}
 };
 
+//void initialize_phi(
+//    const Grid& grid,
+//    const auto& init,
+//    std::vector<double>& phi_centers) {
+//
+//    const double mu = init.mu;
+//    const double a = init.a;
+//    const double b = init.b;
+//
+//    for (size_t j = 0; j < phi_centers.size(); ++j) {
+//        if (grid.centers[j] >= a && grid.centers[j] <= b) {
+//            phi_centers[j] = mu;
+//        } else {
+//            phi_centers[j] = 0.0;
+//        }
+//    }
+//}
+
 void initialize_phi(
     const Grid& grid,
-    const auto& init,
-    std::vector<double>& phi_centers) {
+    const InitCondition::MixtureComponent& init,
+    std::vector<double>& phi) {
 
     const double mu = init.mu;
     const double a = init.a;
     const double b = init.b;
 
-    for (size_t j = 0; j < phi_centers.size(); ++j) {
-        if (grid.centers[j] >= a && grid.centers[j] <= b) {
-            phi_centers[j] = mu;
-        } else {
-            phi_centers[j] = 0.0;
-        }
+    for (int j = 0; j < grid.Nm; ++j) {
+        const double overlap =
+            std::max(
+                0.0,
+                std::min(grid.edges[j + 1], b)
+                - std::max(grid.edges[j], a));
+
+        phi[j] = mu * overlap / grid.dm;
     }
 }
 
