@@ -1,6 +1,6 @@
 find_package(MPI REQUIRED)
 
-add_executable(bridge-ode-pde main.cpp utils.cpp)
+add_executable(bridge-ode-pde main.cpp)
 
 target_compile_options(bridge-ode-pde PRIVATE
 	-Wall
